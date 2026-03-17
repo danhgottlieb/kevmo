@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KevMo — One Man's Quest to Rate Every Beer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== LOADING OVERLAY ===== -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-kevin-wrap">
+        <img src="assets/kevin-loading.png" alt="Kevin sipping beer" class="loading-kevin">
+        <div class="loading-bubbles">
+          <span class="bubble b1"></span>
+          <span class="bubble b2"></span>
+          <span class="bubble b3"></span>
+          <span class="bubble b4"></span>
+          <span class="bubble b5"></span>
+        </div>
+      </div>
+      <p id="loadingMessage" class="loading-msg">Kevin is pouring the data…</p>
+      <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- ===== HERO ===== -->
+  <section id="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-inner">
+      <div class="hero-mascot-wrap">
+        <img src="assets/mascot.png" alt="KevMo" class="mascot-img">
+        <div class="mascot-glow"></div>
+      </div>
+      <div class="hero-text">
+        <h1 class="brand">KevMo</h1>
+        <p class="brand-sub">One Man. Thousands of Beers. Zero&nbsp;Regrets.</p>
+        <div class="hero-stat-row">
+          <div class="hero-stat"><span class="hero-stat-num" id="heroBeers">0</span><span class="hero-stat-label">Beers Rated</span></div>
+          <div class="hero-stat-dot"></div>
+          <div class="hero-stat"><span class="hero-stat-num" id="heroBreweries">0</span><span class="hero-stat-label">Breweries</span></div>
+          <div class="hero-stat-dot"></div>
+          <div class="hero-stat"><span class="hero-stat-num" id="heroStyles">0</span><span class="hero-stat-label">Styles</span></div>
+          <div class="hero-stat-dot"></div>
+          <div class="hero-stat"><span class="hero-stat-num" id="heroRegions">0</span><span class="hero-stat-label">Regions</span></div>
+        </div>
+        <p class="hero-tagline">Kevin drank his way through an entire beer universe and rated every sip. Explore the data, steal his favorites, and skip the&nbsp;duds.</p>
+        <!-- Feature 1: Fun Fact Ticker -->
+        <div class="fun-fact-ticker" id="funFactTicker">
+          <span class="fun-fact-icon">💡</span>
+          <span class="fun-fact-text" id="funFactText">Loading fun fact...</span>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-hint" aria-hidden="true"><span>Dive In</span>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+  </section>
+
+  <!-- Feature 2: Superlative Awards Ribbon -->
+  <section id="awards-ribbon">
+    <div class="container">
+      <div class="awards-header">
+        <img src="assets/kevin-6.png" alt="Kevin the beer expert" class="kevin-awards-img" loading="lazy">
+        <h2 class="awards-title">🏅 Kevin's Superlatives</h2>
+      </div>
+      <div class="awards-scroll" id="awardsScroll"></div>
+    </div>
+  </section>
+
+  <!-- Feature 6: Welcome Tour Modal -->
+  <div id="welcomeModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card welcome-card">
+      <button class="modal-close" id="welcomeClose">✕</button>
+      <div id="welcomeContent"></div>
+    </div>
+  </div>
+
+  <!-- ===== FILTER BAR (sticky) ===== -->
+  <section id="filter-section">
+    <div class="filter-bar">
+      <!-- Row 1: Search + Quick presets -->
+      <div class="filter-row-1">
+        <div class="search-box">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <label for="searchInput" class="sr-only">Search beers</label>
+          <input type="text" id="searchInput" placeholder="Try &quot;hazy&quot;, &quot;Tree House&quot;, or &quot;chocolate&quot;…" autocomplete="off">
+        </div>
+        <div class="presets" id="presets">
+          <button class="preset" data-filter='{"rating":"Outstanding"}' title="The absolute best — rated 9.5 or higher">🏆 Hall of Fame</button>
+          <button class="preset" data-filter='{"styleFamily":"IPA"}' title="Every IPA Kevin's ever rated">🍺 Hop Forward</button>
+          <button class="preset" data-filter='{"styleFamily":"Stout"}' title="Stouts from light to imperial">🖤 Dark &amp; Roasty</button>
+          <button class="preset" data-filter='{"styleFamily":"Sour"}' title="Sours, goses, lambics, and wild ales">🍋 Tart &amp; Funky</button>
+          <button class="preset" data-filter='{"ingredient":"coffee"}' title="Beers brewed with coffee">☕ Coffee Beers</button>
+          <button class="preset" data-filter='{"ingredient":"cherry"}' title="Cherry-infused brews">🍒 Cherry Picks</button>
+          <button class="preset" data-filter='{"ingredient":"chocolate"}' title="Chocolate and cacao-forward beers">🍫 Chocolatey</button>
+          <button class="preset" data-filter='{"ingredient":"barrel"}' title="Aged in bourbon, wine, or whiskey barrels">🪵 Barrel Aged</button>
+          <button class="preset" data-filter='{"abvRange":"imperial"}' title="Big beers — 10% ABV and above">💪 Heavy Hitters</button>
+          <button class="preset" data-filter='{"styleFamily":"Lager"}' title="Lagers, pilsners, and crispy boys">🍻 Crispy Lagers</button>
+        </div>
+      </div>
+      <!-- Row 2: Structured filters -->
+      <div class="filter-row-2">
+        <div class="filter-group">
+          <label for="filterStyle">Style</label>
+          <select id="filterStyle" title="Filter by beer style or style family"><option value="">All Styles</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="filterRegion">Region</label>
+          <select id="filterRegion" title="Filter by state or region"><option value="">Anywhere</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="filterRating">Rating</label>
+          <select id="filterRating" title="Show only beers at or above this tier">
+            <option value="">Any Rating</option>
+            <option value="Outstanding">🏆 Outstanding (9.5+)</option>
+            <option value="Excellent">⭐ Excellent (9+)</option>
+            <option value="Great">👍 Great (8.5+)</option>
+            <option value="Very Good">👌 Very Good (8+)</option>
+            <option value="Good">✓ Good (7.5+)</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filterAbv">ABV</label>
+          <select id="filterAbv" title="Filter by alcohol content range">
+            <option value="">Any Strength</option>
+            <option value="session">Session (&lt;5%) — easy drinking</option>
+            <option value="standard">Standard (5–7%)</option>
+            <option value="strong">Strong (7–10%) — bring a friend</option>
+            <option value="imperial">Imperial (10%+) — hold on tight</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filterSort">Sort</label>
+          <select id="filterSort" title="Change the sort order">
+            <option value="rating-desc">Best First</option>
+            <option value="rating-asc">Lowest First</option>
+            <option value="name-asc">Name A–Z</option>
+            <option value="brewery-asc">Brewery A–Z</option>
+            <option value="abv-desc">Strongest First</option>
+            <option value="abv-asc">Lightest First</option>
+          </select>
+        </div>
+        <button id="clearFilters" class="btn-clear" style="display:none;" title="Reset all filters and start fresh">✕ Clear All</button>
+        <button id="randomBeer" class="btn-random" title="Surprise me with a random beer!">🎲 Random</button>
+        <button id="beerOfTheDay" class="btn-random" title="Today's featured beer — changes daily!" style="background:linear-gradient(135deg,#f0a030,#f27090);margin-left:4px;">⭐ Today's Pick</button>
+      </div>
+      <!-- Active filters -->
+      <div id="activePills" class="active-pills"></div>
+      <div class="filter-status" aria-live="polite"><span id="resultCount">0</span> beers found</div>
+    </div>
+  </section>
+
+  <!-- ===== VIEW TABS ===== -->
+  <section id="view-section">
+    <div class="container">
+      <div class="view-tabs" role="tablist" aria-label="Content views">
+        <button class="view-tab active" data-view="cards" role="tab" aria-selected="true">🍺 The Collection</button>
+        <button class="view-tab" data-view="insights" role="tab" aria-selected="false">📊 Insights</button>
+        <button class="view-tab" data-view="leaderboard" role="tab" aria-selected="false">🏆 Leaderboards</button>
+        <button class="view-tab" data-view="achievements" role="tab" aria-selected="false">🎖️ Trophy Case</button>
+        <button class="view-tab" data-view="play" role="tab" aria-selected="false">🎮 Play</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== BEER CARDS VIEW ===== -->
+  <section id="cards-view" class="view-panel active" role="tabpanel" aria-label="Beer collection">
+    <div class="container">
+      <div id="beerGrid" class="beer-grid"></div>
+      <div id="pagination" class="pagination"></div>
+    </div>
+  </section>
+
+  <!-- ===== INSIGHTS VIEW ===== -->
+  <section id="insights-view" class="view-panel" role="tabpanel" aria-label="Insights and charts">
+    <div class="container">
+      <div class="insights-intro has-kevin">
+        <img src="assets/kevin-1.png" alt="Kevin brewing" class="kevin-section-img" loading="lazy">
+        <div class="intro-text">
+          <h2 class="section-headline">What Thousands of Beers Reveal</h2>
+          <p class="section-desc">Rate enough beers and the data starts talking back. These charts tell Kevin's story — filtered live to whatever you've got&nbsp;selected.</p>
+        </div>
+      </div>
+      <div class="insights-grid">
+        <!-- Row 1: Bubble chart + Scatter plot -->
+        <div class="insight-card wide"><div class="insight-head">Style Explorer <span class="insight-badge">bigger bubble = more beers, higher rating, wider ABV range</span></div><div class="chart-wrapper" style="position:relative;height:420px;width:100%"><canvas id="chartStyles" role="img" aria-label="Bubble chart showing beer styles by count, average rating, and ABV range"></canvas></div></div>
+        <div class="insight-card wide"><div class="insight-head">Brewery Landscape <span class="insight-badge">how many beers vs how good they are</span></div><div class="chart-wrapper" style="position:relative;height:380px;width:100%"><canvas id="chartBreweries" role="img" aria-label="Scatter chart showing breweries by beer count versus average rating"></canvas></div></div>
+        <!-- Row 2: Distributions side-by-side -->
+        <div class="insight-card"><div class="insight-head">Where the Scores Land <span class="insight-badge">how Kevin distributes his ratings</span></div><div class="chart-wrapper" style="position:relative;height:280px;width:100%"><canvas id="chartRatings" role="img" aria-label="Histogram showing distribution of beer ratings"></canvas></div></div>
+        <div class="insight-card"><div class="insight-head">ABV vs Rating <span class="insight-badge">does stronger = better?</span></div><div class="chart-wrapper" style="position:relative;height:280px;width:100%"><canvas id="chartAbv" role="img" aria-label="Scatter chart showing correlation between ABV and rating"></canvas></div></div>
+        <!-- Row 3: Regions lollipop -->
+        <div class="insight-card wide"><div class="insight-head">Best Regions for Beer <span class="insight-badge">avg rating by region · dot size = how many Kevin tried</span></div><div class="chart-wrapper" style="position:relative;height:380px;width:100%"><canvas id="chartRegions" role="img" aria-label="Lollipop chart showing top-rated beer regions"></canvas></div></div>
+        <!-- Row 4: Hops & Notes as bubble charts -->
+        <div class="insight-card"><div class="insight-head">Hops That Hit Different <span class="insight-badge">how often each hop appears vs how Kevin rates it</span></div><div class="chart-wrapper" style="position:relative;height:320px;width:100%"><canvas id="chartHops" role="img" aria-label="Bubble chart showing hop varieties by count and average rating"></canvas></div></div>
+        <div class="insight-card"><div class="insight-head">Flavor Notes Worth Chasing <span class="insight-badge">which tasting notes show up in the best beers</span></div><div class="chart-wrapper" style="position:relative;height:320px;width:100%"><canvas id="chartNotes" role="img" aria-label="Bubble chart showing tasting notes by frequency and average rating"></canvas></div></div>
+        <!-- Row 5: NEW visualizations -->
+        <div class="insight-card"><div class="insight-head">Style Family Radar <span class="insight-badge">comparing styles across count, rating, ABV &amp; more</span></div><div class="chart-wrapper" style="position:relative;height:340px;width:100%"><canvas id="chartRadar" role="img" aria-label="Radar chart comparing style families across multiple dimensions"></canvas></div></div>
+        <div class="insight-card"><div class="insight-head">Rating Breakdown <span class="insight-badge">what % of beers land in each quality tier</span></div><div class="chart-wrapper" style="position:relative;height:340px;width:100%"><canvas id="chartDoughnut" role="img" aria-label="Doughnut chart showing percentage breakdown of rating tiers"></canvas></div></div>
+        <div class="insight-card wide"><div class="insight-head">ABV Density by Style <span class="insight-badge">where each style lives on the alcohol spectrum</span></div><div class="chart-wrapper" style="position:relative;height:300px;width:100%"><canvas id="chartAbvDensity" role="img" aria-label="Stacked area chart showing ABV distribution across beer styles"></canvas></div></div>
+        <!-- NEW: Outlier / Surprise Beers -->
+        <div class="insight-card wide" id="surpriseBeersCard">
+          <div class="insight-head">🎲 Surprise Beers <span class="insight-badge">outliers that broke the mold for their style</span></div>
+          <p style="font-size:.82rem;color:var(--text-3);margin-bottom:12px;line-height:1.4">The overachievers and underperformers — beers Kevin rated way above or below what their style normally scores. Click any beer to dig&nbsp;deeper.</p>
+          <div id="surpriseBeersContent"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LEADERBOARD VIEW ===== -->
+  <section id="leaderboard-view" class="view-panel" role="tabpanel" aria-label="Leaderboards">
+    <div class="container">
+      <div class="insights-intro has-kevin">
+        <div class="intro-text">
+          <h2 class="section-headline">The Definitive Rankings</h2>
+          <p class="section-desc">Settled by data, not bar arguments. Who brews the best beer? Which styles reign supreme? Kevin's ratings have&nbsp;opinions.</p>
+        </div>
+        <img src="assets/kevin-3.png" alt="Kevin judging beers" class="kevin-section-img" loading="lazy">
+      </div>
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-lb="breweries">🏭 Best Breweries</button>
+        <button class="lb-tab" data-lb="styles">🎨 Top Styles</button>
+        <button class="lb-tab" data-lb="regions">🌍 Regions</button>
+        <button class="lb-tab" data-lb="hops">🌿 Hops MVP</button>
+        <button class="lb-tab" data-lb="spots">📍 Best Spots</button>
+        <button class="lb-tab" data-lb="gems">💎 Hidden Gems</button>
+      </div>
+      <div id="leaderboardContent" class="lb-content"></div>
+    </div>
+  </section>
+
+  <!-- ===== ACHIEVEMENTS VIEW ===== -->
+  <section id="achievements-view" class="view-panel" role="tabpanel" aria-label="Achievements">
+    <div class="container">
+      <div class="insights-intro has-kevin">
+        <img src="assets/kevin-4.png" alt="Kevin celebrating" class="kevin-section-img" loading="lazy">
+        <div class="intro-text">
+          <h2 class="section-headline">Kevin's Trophy Case</h2>
+          <p class="section-desc">Every epic journey has milestones. Some Kevin crushed ages ago, others he's still chasing — the man doesn't know how to&nbsp;quit.</p>
+        </div>
+      </div>
+      <div id="achievementsGrid" class="achievements-grid"></div>
+    </div>
+  </section>
+
+  <!-- ===== PLAY VIEW — Social & Interactive Games ===== -->
+  <section id="play-view" class="view-panel" role="tabpanel" aria-label="Games and activities">
+    <div class="container">
+      <div class="insights-intro has-kevin">
+        <div class="intro-text">
+          <h2 class="section-headline">Game Night 🎮</h2>
+          <p class="section-desc">Think you know Kevin's palate? Prove it. Quiz yourself, pit styles against each other, and hunt for hidden treasures in the&nbsp;collection.</p>
+        </div>
+        <img src="assets/kevin-2.png" alt="Kevin with phone" class="kevin-section-img" loading="lazy">
+      </div>
+      <div class="play-grid">
+        <!-- Feature 3: Rating Quiz -->
+        <div class="play-card" id="quizCard">
+          <div class="play-card-head">
+            <span class="play-emoji">🤔</span>
+            <h3>Guess Kevin's Rating</h3>
+            <p>See a beer, guess the score. How well do you know Kevin's taste?</p>
+          </div>
+          <div id="quizContent" class="play-card-body">
+            <button class="play-btn" id="startQuiz">Start Quiz</button>
+          </div>
+        </div>
+
+        <!-- Feature 4: Style Showdown -->
+        <div class="play-card" id="showdownCard">
+          <div class="play-card-head">
+            <span class="play-emoji">⚔️</span>
+            <h3>Style Showdown</h3>
+            <p>Pick two styles — see which one Kevin actually prefers.</p>
+          </div>
+          <div id="showdownContent" class="play-card-body">
+            <div class="showdown-picks">
+              <select id="showdownA" class="showdown-select"><option value="">Pick Style A</option></select>
+              <span class="showdown-vs">VS</span>
+              <select id="showdownB" class="showdown-select"><option value="">Pick Style B</option></select>
+            </div>
+            <button class="play-btn" id="startShowdown">Fight!</button>
+            <div id="showdownResult"></div>
+          </div>
+        </div>
+
+        <!-- Feature 5: Scavenger Hunt -->
+        <div class="play-card wide" id="huntCard">
+          <div class="play-card-head">
+            <span class="play-emoji">🔍</span>
+            <h3>Scavenger Hunt</h3>
+            <p>Can you find a beer in Kevin's collection that matches the challenge?</p>
+          </div>
+          <div id="huntContent" class="play-card-body">
+            <div id="huntChallenge" class="hunt-challenge"></div>
+            <button class="play-btn" id="newHunt">New Challenge</button>
+          </div>
+        </div>
+
+        <!-- Feature NEW: Tasting Flight Generator -->
+        <div class="play-card wide" id="flightCard">
+          <div class="play-card-head">
+            <span class="play-emoji">✈️</span>
+            <h3>Tasting Flight Generator</h3>
+            <p>Hosting a tasting? Pick a vibe and we'll build a flight of 4–6 diverse beers from Kevin's collection. Impress your friends.</p>
+          </div>
+          <div id="flightContent" class="play-card-body">
+            <div class="flight-controls">
+              <div class="filter-group">
+                <label for="flightTheme">Theme</label>
+                <select id="flightTheme">
+                  <option value="diverse">🌈 Max Diversity (mix of styles)</option>
+                  <option value="ipa">🍺 IPA Exploration</option>
+                  <option value="dark">🖤 Dark &amp; Roasty (stouts/porters)</option>
+                  <option value="sour">🍋 Sour Adventure</option>
+                  <option value="strong">💪 Heavy Hitters (10%+ ABV)</option>
+                  <option value="crowd-pleaser">🎉 Crowd Pleasers (8.5+ rated)</option>
+                  <option value="hidden-gems">💎 Hidden Gems (under-the-radar picks)</option>
+                  <option value="controversial">🤔 Controversial (Kevin's hot takes)</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="flightSize">Flight Size</label>
+                <select id="flightSize">
+                  <option value="4">4 beers</option>
+                  <option value="5">5 beers</option>
+                  <option value="6" selected>6 beers</option>
+                </select>
+              </div>
+              <button class="play-btn" id="generateFlight">🛫 Build My Flight</button>
+            </div>
+            <div id="flightResult"></div>
+          </div>
+        </div>
+
+        <!-- Feature 7: Kevin vs. Average -->
+        <div class="play-card" id="vsCard">
+          <div class="play-card-head">
+            <span class="play-emoji">📊</span>
+            <h3>Kevin vs. The World</h3>
+            <p>Kevin's palate vs. the average beer drinker — spoiler: he's not average.</p>
+          </div>
+          <div id="vsContent" class="play-card-body"></div>
+        </div>
+
+        <!-- Feature 9: Exploration Progress -->
+        <div class="play-card" id="progressCard">
+          <div class="play-card-head">
+            <span class="play-emoji">🗺️</span>
+            <h3>Exploration Map</h3>
+            <p>Track how thoroughly Kevin has conquered each style family. Some are dominated, others… need work.</p>
+          </div>
+          <div id="progressContent" class="play-card-body"></div>
+        </div>
+
+        <!-- Feature 10: Shareable Stats -->
+        <div class="play-card wide" id="shareCard">
+          <div class="play-card-head">
+            <span class="play-emoji">📸</span>
+            <h3>Shareable Stats</h3>
+            <p>Flex Kevin's absurd stats on your friends. Click a card to copy — perfect for group chat bragging.</p>
+          </div>
+          <div id="shareContent" class="play-card-body">
+            <div class="share-cards-row" id="shareCardsRow"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== BEER DETAIL MODAL ===== -->
+  <div id="beerModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Beer details">
+    <div class="modal-card">
+      <button class="modal-close" id="modalClose" aria-label="Close dialog">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div class="container footer-inner">
+      <img src="assets/kevin-5.png" alt="Kevin surprised" class="kevin-footer-img" loading="lazy">
+      <p class="footer-brand">KevMo</p>
+      <p class="footer-sub"><span id="footerCount">0</span> beers deep and still pouring — built with obsessive data &amp; questionable life&nbsp;choices</p>
+      <a href="../kevmo-ai/index.html" class="footer-cta">🤖 Try KevMo AI →</a>
+    </div>
+  </footer>
+
+  <script src="loader.js"></script>
+</body>
+</html>

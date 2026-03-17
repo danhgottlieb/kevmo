@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/beer-data", "destination": "/api/beer-data" }
+  ]
+}
