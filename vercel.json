@@ -1,4 +1,7 @@
 {
+  "buildCommand": false,
+  "installCommand": false,
+  "framework": null,
   "rewrites": [
     { "source": "/api/beer-data", "destination": "/api/beer-data" }
   ]
