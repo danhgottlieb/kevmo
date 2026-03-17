@@ -1,7 +1,8 @@
 {
-  "buildCommand": false,
-  "installCommand": false,
+  "buildCommand": "",
+  "installCommand": "",
   "framework": null,
+  "outputDirectory": ".",
   "rewrites": [
     { "source": "/api/beer-data", "destination": "/api/beer-data" }
   ]
