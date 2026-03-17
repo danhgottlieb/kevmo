@@ -4,3 +4,4 @@ extra photos/
 *.log
 .DS_Store
 Thumbs.db
+.vercel

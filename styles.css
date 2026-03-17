@@ -64,11 +64,10 @@ button:focus:not(:focus-visible),select:focus:not(:focus-visible),input:focus:no
 .hero-stat-label{font-size:.8rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
 .hero-stat-dot{width:4px;height:4px;border-radius:50%;background:var(--text-3)}
 .hero-tagline{font-size:1rem;color:var(--text-3);max-width:360px;line-height:1.5}
-.scroll-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--text-3);font-size:.8rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;animation:bob 2s ease-in-out infinite;opacity:.4}
-@keyframes bob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
+
 
 /* ===== FILTER BAR ===== */
-#filter-section{position:sticky;top:0;z-index:100;background:rgba(8,9,14,.90);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:10px 0 6px}
+#filter-section{background:rgba(8,9,14,.90);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:10px 0 6px}
 .filter-bar{max-width:1200px;margin:0 auto;padding:0 20px}
 .filter-row-1{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .search-box{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;flex:0 0 300px;transition:border-color .2s;min-height:44px}
@@ -98,9 +97,9 @@ button:focus:not(:focus-visible),select:focus:not(:focus-visible),input:focus:no
 .filter-status{font-size:.76rem;font-weight:600;color:var(--text-3);margin-top:4px;text-align:right}
 .filter-status span{color:var(--amber-l);font-weight:700}
 
-/* ===== VIEW TABS ===== */
-#view-section{padding:14px 0 0}
-.view-tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);padding-bottom:0}
+/* ===== VIEW TABS (sticky below filter bar) ===== */
+#view-section{padding:0;position:sticky;top:0;z-index:99;background:rgba(8,9,14,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:2px solid var(--border)}
+.view-tabs{display:flex;gap:2px;padding:0;max-width:1200px;margin:0 auto;padding:0 20px}
 .view-tab{font-family:var(--font);font-size:.86rem;font-weight:600;padding:12px 18px;border:none;background:none;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;min-height:44px}
 .view-tab:hover{color:var(--text-2)}
 .view-tab.active{color:var(--amber-l);border-bottom-color:var(--amber)}
