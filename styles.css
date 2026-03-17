@@ -98,11 +98,11 @@ button:focus:not(:focus-visible),select:focus:not(:focus-visible),input:focus:no
 .filter-status span{color:var(--amber-l);font-weight:700}
 
 /* ===== VIEW TABS (sticky below filter bar) ===== */
-#view-section{padding:0;position:sticky;top:0;z-index:99;background:rgba(8,9,14,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:2px solid var(--border)}
+#view-section{padding:0;position:sticky;top:0;z-index:99;background:rgba(8,9,14,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:2px solid var(--amber);box-shadow:0 2px 12px rgba(240,160,48,.15)}
 .view-tabs{display:flex;gap:2px;padding:0;max-width:1200px;margin:0 auto;padding:0 20px}
-.view-tab{font-family:var(--font);font-size:.86rem;font-weight:600;padding:12px 18px;border:none;background:none;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;min-height:44px}
-.view-tab:hover{color:var(--text-2)}
-.view-tab.active{color:var(--amber-l);border-bottom-color:var(--amber)}
+.view-tab{font-family:var(--font);font-size:.9rem;font-weight:700;padding:14px 18px;border:none;background:none;color:var(--text-2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;min-height:44px;text-shadow:0 1px 4px rgba(0,0,0,.3)}
+.view-tab:hover{color:var(--amber-l);background:rgba(240,160,48,.06)}
+.view-tab.active{color:var(--amber-l);border-bottom-color:var(--amber);background:rgba(240,160,48,.10)}
 .view-panel{display:none;padding:20px 0 48px}
 .view-panel.active{display:block;animation:fadeUp .25s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
