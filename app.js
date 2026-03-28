@@ -83,6 +83,23 @@
     return arr.reduce((a, b) => a + b, 0) / arr.length;
   }
 
+  // Split collaboration entries on " / " or "/" (e.g. "Brewery A / Brewery B" → ["Brewery A", "Brewery B"])
+  function splitCollabs(value) {
+    if (!value) return [''];
+    if (value.indexOf('/') === -1) return [value];
+    return value.split(/\s*\/\s*/).map(function(s) { return s.trim(); }).filter(Boolean);
+  }
+
+  // Six Pack Score: avg of top 6 ratings, padding with global avg if fewer than 6
+  function sixPackScore(ratings, gAvg) {
+    var sorted = ratings.slice().sort(function(a, b) { return b - a; });
+    var top6 = [];
+    for (var i = 0; i < 6; i++) {
+      top6.push(i < sorted.length ? sorted[i] : gAvg);
+    }
+    return avg(top6);
+  }
+
   // ── Chart Insight Caption Helper──────────────────────────
   function setInsightCaption(canvasId, text) {
     var canvas = document.getElementById(canvasId);
@@ -103,7 +120,7 @@
     if (!container) return;
     var existing = container.querySelector('.filter-banner');
     if (existing) existing.remove();
-    var isFiltered = filters.search || filters.style || filters.region ||
+    var isFiltered = filters.search || filters.style || filters.region || filters.city ||
                      filters.rating || filters.abv || filters.ingredient;
     if (!isFiltered) return;
     var parts = [];
@@ -112,6 +129,7 @@
       parts.push('Style: ' + (filters.style.startsWith('family:') ? 'All ' + filters.style.substring(7) : filters.style));
     }
     if (filters.region) parts.push('Region: ' + filters.region);
+    if (filters.city) parts.push('City: ' + filters.city);
     if (filters.rating) parts.push('Rating: ' + filters.rating + '+');
     if (filters.abv) parts.push('ABV: ' + filters.abv);
     if (filters.ingredient) parts.push('Ingredient: ' + filters.ingredient);
@@ -170,6 +188,11 @@
     b._abv = parseAbv(b.abv);
     dataById.set(String(b.id), b);
   });
+  // Global average rating (used by six-pack scoring)
+  var globalAvg = (function() {
+    var rated = data.filter(function(b) { return b.rating != null; });
+    return rated.length ? avg(rated.map(function(b) { return b.rating; })) : 0;
+  })();
   let filtered = [];
   let currentPage = 1;
   let currentView = 'cards';
@@ -182,6 +205,7 @@
     search: '',
     style: '',
     region: '',
+    city: '',
     rating: '',
     abv: '',
     sort: 'rating-desc',
@@ -195,6 +219,7 @@
     if (filters.search) parts.push('q=' + encodeURIComponent(filters.search));
     if (filters.style) parts.push('style=' + encodeURIComponent(filters.style));
     if (filters.region) parts.push('region=' + encodeURIComponent(filters.region));
+    if (filters.city) parts.push('city=' + encodeURIComponent(filters.city));
     if (filters.rating) parts.push('rating=' + encodeURIComponent(filters.rating));
     if (filters.abv) parts.push('abv=' + encodeURIComponent(filters.abv));
     if (filters.ingredient) parts.push('ing=' + encodeURIComponent(filters.ingredient));
@@ -217,6 +242,7 @@
     if (params.q) { filters.search = params.q; dom.searchInput.value = params.q; }
     if (params.style) { filters.style = params.style; dom.filterStyle.value = params.style; }
     if (params.region) { filters.region = params.region; dom.filterRegion.value = params.region; }
+    if (params.city) { filters.city = params.city; if (dom.filterCity) dom.filterCity.value = params.city; }
     if (params.rating) { filters.rating = params.rating; dom.filterRating.value = params.rating; }
     if (params.abv) { filters.abv = params.abv; dom.filterAbv.value = params.abv; }
     if (params.sort) { filters.sort = params.sort; dom.filterSort.value = params.sort; }
@@ -238,6 +264,7 @@
     dom.searchInput    = $('#searchInput');
     dom.filterStyle    = $('#filterStyle');
     dom.filterRegion   = $('#filterRegion');
+    dom.filterCity     = $('#filterCity');
     dom.filterRating   = $('#filterRating');
     dom.filterAbv      = $('#filterAbv');
     dom.filterSort     = $('#filterSort');
@@ -265,9 +292,11 @@
       'Barleywine', 'Scotch', 'Kölsch', 'Tripel', 'Dubbel'
     ];
 
-    // Single pass: collect unique styles, regions, and family counts
+    // Single pass: collect unique styles, regions, cities, and family counts
     const styleSet = new Set();
     const regionSet = new Set();
+    const citySet = new Set();
+    const cityToRegions = {};
     const familyCounts = {};
     data.forEach(function(b) {
       if (b.style) {
@@ -281,10 +310,26 @@
           }
         }
       }
-      if (b.state) regionSet.add(b.state);
+      if (b.state) {
+        splitCollabs(b.state).forEach(function(s) { if (s) regionSet.add(s); });
+      }
+      if (b.city) {
+        splitCollabs(b.city).forEach(function(c) {
+          if (c) {
+            citySet.add(c);
+            splitCollabs(b.state).forEach(function(s) {
+              if (s) {
+                if (!cityToRegions[c]) cityToRegions[c] = new Set();
+                cityToRegions[c].add(s);
+              }
+            });
+          }
+        });
+      }
     });
     const allStyles = [...styleSet].sort();
     const regions = [...regionSet].sort();
+    const cities = [...citySet].sort();
 
     var familyGroup = document.createElement('optgroup');
     familyGroup.label = '── Style Families ──';
@@ -314,23 +359,38 @@
       o.value = r; o.textContent = r;
       dom.filterRegion.appendChild(o);
     });
+
+    // Populate city dropdown
+    dom._cityToRegions = cityToRegions;
+    dom._allCities = cities;
+    cities.forEach(c => {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      dom.filterCity.appendChild(o);
+    });
   }
 
   function applyFilters() {
     const search = filters.search.toLowerCase();
     const ratingThreshold = filters.rating ? tierIndex(filters.rating) : -1;
+    // Build word-boundary regex for search to avoid matching inside longer words
+    // e.g. "gin" won't match "original", but "tree house" still matches "Tree House Brewing"
+    var searchRe = null;
+    if (search) {
+      try { searchRe = new RegExp('\\b' + search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); } catch(e) { searchRe = null; }
+    }
 
     filtered = data.filter(b => {
-      // Text search — beer name, brewery, style, tasting notes, adjuncts, hops
+      // Text search — all text columns (word-boundary matching)
       if (search) {
-        const name = (b.beer || '').toLowerCase();
-        const brew = (b.brewery || '').toLowerCase();
-        const style = (b.style || '').toLowerCase();
-        const notes = (b.tastingNotes || '').toLowerCase();
-        const adj = (b.adjuncts || '').toLowerCase();
-        const hops = (b.hops || '').toLowerCase();
-        if (!name.includes(search) && !brew.includes(search) && !style.includes(search) &&
-            !notes.includes(search) && !adj.includes(search) && !hops.includes(search)) return false;
+        var haystack = [b.beer, b.brewery, b.style, b.tastingNotes, b.adjuncts, b.hops,
+                        b.city, b.state, b.purchased, b.servingType]
+          .map(function(s) { return s || ''; }).join(' ');
+        if (searchRe) {
+          if (!searchRe.test(haystack)) return false;
+        } else {
+          if (!haystack.toLowerCase().includes(search)) return false;
+        }
       }
       // Style — supports family: prefix for multi-keyword families
       if (filters.style) {
@@ -341,8 +401,16 @@
           if (!(b.style || '').includes(filters.style)) return false;
         }
       }
-      // Region
-      if (filters.region && b.state !== filters.region) return false;
+      // Region (collab-aware)
+      if (filters.region) {
+        var regions = splitCollabs(b.state);
+        if (regions.indexOf(filters.region) === -1) return false;
+      }
+      // City (collab-aware)
+      if (filters.city) {
+        var cities = splitCollabs(b.city);
+        if (cities.indexOf(filters.city) === -1) return false;
+      }
       // Rating tier
       if (filters.rating) {
         const bi = tierIndex(b.simpleRating);
@@ -425,7 +493,7 @@
   }
 
   function updateClearButton() {
-    const active = filters.search || filters.style || filters.region ||
+    const active = filters.search || filters.style || filters.region || filters.city ||
                    filters.rating || filters.abv || filters.ingredient;
     dom.clearFilters.style.display = active ? '' : 'none';
   }
@@ -434,6 +502,7 @@
     filters.search = '';
     filters.style = '';
     filters.region = '';
+    filters.city = '';
     filters.rating = '';
     filters.abv = '';
     filters.sort = 'rating-desc';
@@ -441,6 +510,7 @@
     dom.searchInput.value = '';
     dom.filterStyle.value = '';
     dom.filterRegion.value = '';
+    if (dom.filterCity) dom.filterCity.value = '';
     dom.filterRating.value = '';
     dom.filterAbv.value = '';
     dom.filterSort.value = 'rating-desc';
@@ -457,6 +527,7 @@
       html += pill('style', label);
     }
     if (filters.region) html += pill('region', 'Region: ' + filters.region);
+    if (filters.city) html += pill('city', 'City: ' + filters.city);
     if (filters.rating) html += pill('rating', 'Rating: ' + filters.rating + '+');
     if (filters.abv) html += pill('abv', 'ABV: ' + filters.abv);
     if (filters.ingredient) html += pill('ingredient', 'Ingredient: ' + filters.ingredient);
@@ -474,6 +545,7 @@
       case 'search':  dom.searchInput.value = ''; break;
       case 'style':   dom.filterStyle.value = ''; break;
       case 'region':  dom.filterRegion.value = ''; break;
+      case 'city':    if (dom.filterCity) dom.filterCity.value = ''; break;
       case 'rating':  dom.filterRating.value = ''; break;
       case 'abv':     dom.filterAbv.value = ''; break;
       case 'ingredient': break; // no dropdown to reset
@@ -587,8 +659,11 @@
       b => b.id !== beer.id && b.style === beer.style && b.rating != null && b.rating >= 8
     ).slice(0, 6);
 
-    // Brewery deep-dive stats
-    var breweryBeers = data.filter(function(b) { return b.brewery === beer.brewery && b.rating != null; });
+    // Brewery deep-dive stats (collab-aware: uses first brewery)
+    var primaryBrewery = splitCollabs(beer.brewery)[0] || beer.brewery;
+    var breweryBeers = data.filter(function(b) {
+      return splitCollabs(b.brewery).indexOf(primaryBrewery) !== -1 && b.rating != null;
+    });
     var breweryAvg = breweryBeers.length ? avg(breweryBeers.map(function(b) { return b.rating; })) : 0;
     var breweryBest = breweryBeers.slice().sort(function(a,b) { return (b.rating||0)-(a.rating||0); })[0];
     var breweryStyles = [...new Set(breweryBeers.map(function(b) { return b.style; }).filter(Boolean))];
@@ -625,7 +700,7 @@
       // Brewery deep-dive
       (breweryBeers.length > 1
         ? '<div class="modal-section brewery-dive">' +
-          '<h4>🏭 More from ' + esc(beer.brewery) + '</h4>' +
+          '<h4>🏭 More from ' + esc(primaryBrewery) + '</h4>' +
           '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:.82rem">' +
             '<div><span style="color:var(--gold);font-weight:700">' + breweryBeers.length + '</span> <span style="color:var(--text-3)">beers tried</span></div>' +
             '<div><span style="color:var(--gold);font-weight:700">' + breweryAvg.toFixed(1) + '</span> <span style="color:var(--text-3)">avg rating</span></div>' +
@@ -865,9 +940,10 @@
 
     var map = {};
     rated.forEach(function(b) {
-      var s = b.brewery || 'Unknown';
-      if (!map[s]) map[s] = [];
-      map[s].push(b.rating);
+      splitCollabs(b.brewery || 'Unknown').forEach(function(s) {
+        if (!map[s]) map[s] = [];
+        map[s].push(b.rating);
+      });
     });
 
     var rows = Object.entries(map)
@@ -875,8 +951,8 @@
       .map(function(e) {
         var k = e[0], v = e[1];
         var sorted = v.slice().sort(function(a,b){return a-b;});
-        var stdDev = Math.sqrt(v.map(function(x){var m=avg(v);return(x-m)*(x-m);}).reduce(function(a,b){return a+b;},0)/v.length);
-        return { label: k, count: v.length, avg: avg(v), min: sorted[0], max: sorted[sorted.length-1], stdDev: stdDev };
+        var sd = Math.sqrt(v.map(function(x){var m=avg(v);return(x-m)*(x-m);}).reduce(function(a,b){return a+b;},0)/v.length);
+        return { label: k, count: v.length, avg: sixPackScore(v, globalAvg), rawAvg: avg(v), min: sorted[0], max: sorted[sorted.length-1], stdDev: sd };
       })
       .sort(function(a, b) { return b.avg - a.avg; })
       .slice(0, 40);
@@ -884,13 +960,14 @@
     if (!rows.length) return;
     var opts = chartDefaults();
     opts.scales.x.title = { display: true, text: 'Number of Beers', color: '#7f87a0', font: { family: 'Space Grotesk', size: 12 } };
-    opts.scales.y.title = { display: true, text: 'Avg Rating', color: '#7f87a0', font: { family: 'Space Grotesk', size: 12 } };
+    opts.scales.y.title = { display: true, text: 'Six Pack Score', color: '#7f87a0', font: { family: 'Space Grotesk', size: 12 } };
     opts.scales.y.min = Math.max(6, Math.floor((Math.min.apply(null, rows.map(function(r){return r.avg;})) - 0.5) * 2) / 2);
     opts.scales.y.max = 10;
     opts.plugins.tooltip = richTooltip(null, function(ctx) {
       var d = rows[ctx.dataIndex];
       return [
-        '  Avg Rating: ' + d.avg.toFixed(2),
+        '  6-Pack Score: ' + d.avg.toFixed(2),
+        '  Avg Rating: ' + d.rawAvg.toFixed(2),
         '  Beers: ' + d.count,
         '  Range: ' + d.min.toFixed(1) + ' – ' + d.max.toFixed(1),
         '  Consistency: ±' + d.stdDev.toFixed(2)
@@ -933,7 +1010,7 @@
       var topBrew = rows[0];
       var mostConsistent = rows.filter(function(r){return r.count>=5;}).sort(function(a,b){return a.stdDev - b.stdDev;})[0];
       var mostExplored = rows.slice().sort(function(a,b){return b.count-a.count;})[0];
-      var caption = '📊 <strong>' + esc(topBrew.label) + '</strong> tops with ' + topBrew.avg.toFixed(1) + ' avg across ' + topBrew.count + ' beers. ';
+      var caption = '📊 <strong>' + esc(topBrew.label) + '</strong> tops with ' + topBrew.avg.toFixed(1) + ' six-pack score across ' + topBrew.count + ' beers. ';
       if (mostConsistent && mostConsistent.label !== topBrew.label) {
         caption += 'Most consistent: <strong>' + esc(mostConsistent.label) + '</strong> (±' + mostConsistent.stdDev.toFixed(2) + '). ';
       }
@@ -1098,9 +1175,10 @@
 
     var map = {};
     rated.forEach(function(b) {
-      var s = b.state || 'Unknown';
-      if (!map[s]) map[s] = [];
-      map[s].push(b.rating);
+      splitCollabs(b.state || 'Unknown').forEach(function(s) {
+        if (!map[s]) map[s] = [];
+        map[s].push(b.rating);
+      });
     });
 
     var rows = Object.entries(map)
@@ -1560,6 +1638,9 @@
   }
 
   // ── Master render function ──
+  // Store chart data for list-view toggles
+  var insightListData = {};
+
   function renderInsights() {
     // Always rebuild charts with current filtered data
     var rated = filtered.filter(function(b) { return b.rating != null; });
@@ -1575,6 +1656,174 @@
     buildRatingDoughnut('chartDoughnut', rated);
     buildAbvDensity('chartAbvDensity', filtered);
     renderSurpriseBeers(rated);
+
+    // Build list data for toggleable charts
+    buildInsightListData(rated);
+    injectToggleButtons();
+  }
+
+  function buildInsightListData(rated) {
+    // Style Explorer
+    var styleMap = {};
+    rated.forEach(function(b) {
+      var s = b.style || 'Unknown';
+      if (!styleMap[s]) styleMap[s] = { ratings: [], abvs: [] };
+      styleMap[s].ratings.push(b.rating);
+      styleMap[s].abvs.push(b._abv);
+    });
+    insightListData['chartStyles'] = {
+      title: 'Style Explorer',
+      headers: ['Style', 'Count', 'Avg Rating', 'Avg ABV'],
+      rows: Object.entries(styleMap)
+        .filter(function(e) { return e[1].ratings.length >= 3; })
+        .map(function(e) { return { cols: [e[0], e[1].ratings.length, avg(e[1].ratings).toFixed(2), avg(e[1].abvs).toFixed(1) + '%'], sort: avg(e[1].ratings) }; })
+        .sort(function(a, b) { return b.sort - a.sort; })
+    };
+
+    // Brewery Landscape (with six-pack score)
+    var brewMap = {};
+    rated.forEach(function(b) {
+      splitCollabs(b.brewery || 'Unknown').forEach(function(s) {
+        if (!brewMap[s]) brewMap[s] = [];
+        brewMap[s].push(b.rating);
+      });
+    });
+    insightListData['chartBreweries'] = {
+      title: 'Brewery Landscape',
+      headers: ['Brewery', 'Count', '6-Pack Score', 'Avg', 'Range'],
+      rows: Object.entries(brewMap)
+        .filter(function(e) { return e[1].length >= 3; })
+        .map(function(e) {
+          var sorted = e[1].slice().sort(function(a,b){return a-b;});
+          return { cols: [e[0], e[1].length, sixPackScore(e[1], globalAvg).toFixed(2), avg(e[1]).toFixed(2), sorted[0].toFixed(1) + '–' + sorted[sorted.length-1].toFixed(1)], sort: sixPackScore(e[1], globalAvg) };
+        })
+        .sort(function(a, b) { return b.sort - a.sort; })
+    };
+
+    // Region
+    var regMap = {};
+    rated.forEach(function(b) {
+      splitCollabs(b.state || 'Unknown').forEach(function(s) {
+        if (!regMap[s]) regMap[s] = [];
+        regMap[s].push(b.rating);
+      });
+    });
+    insightListData['chartRegions'] = {
+      title: 'Best Regions',
+      headers: ['Region', 'Count', 'Avg Rating'],
+      rows: Object.entries(regMap)
+        .filter(function(e) { return e[1].length >= 5; })
+        .map(function(e) { return { cols: [e[0], e[1].length, avg(e[1]).toFixed(2)], sort: avg(e[1]) }; })
+        .sort(function(a, b) { return b.sort - a.sort; })
+    };
+
+    // Hops
+    var hopMap2 = {};
+    rated.forEach(function(b) {
+      if (!b.hops || b.hops === 'None') return;
+      b.hops.split(',').forEach(function(h) {
+        h = h.trim(); if (!h) return;
+        if (!hopMap2[h]) hopMap2[h] = [];
+        hopMap2[h].push(b.rating);
+      });
+    });
+    insightListData['chartHops'] = {
+      title: 'Hops That Hit Different',
+      headers: ['Hop', 'Count', 'Avg Rating'],
+      rows: Object.entries(hopMap2)
+        .filter(function(e) { return e[1].length >= 2; })
+        .map(function(e) { return { cols: [e[0], e[1].length, avg(e[1]).toFixed(2)], sort: avg(e[1]) }; })
+        .sort(function(a, b) { return b.sort - a.sort; })
+    };
+
+    // Flavor Notes
+    var noteMap = {};
+    rated.forEach(function(b) {
+      if (!b.tastingNotes) return;
+      var words = b.tastingNotes.toLowerCase().split(/[\s,;.]+/);
+      words.forEach(function(w) {
+        if (w.length < 4) return;
+        if (!noteMap[w]) noteMap[w] = [];
+        noteMap[w].push(b.rating);
+      });
+    });
+    insightListData['chartNotes'] = {
+      title: 'Flavor Notes',
+      headers: ['Note', 'Count', 'Avg Rating'],
+      rows: Object.entries(noteMap)
+        .filter(function(e) { return e[1].length >= 5; })
+        .map(function(e) { return { cols: [e[0], e[1].length, avg(e[1]).toFixed(2)], sort: avg(e[1]) }; })
+        .sort(function(a, b) { return b.sort - a.sort; })
+    };
+
+    // ABV vs Rating — individual beers
+    insightListData['chartAbv'] = {
+      title: 'ABV vs Rating',
+      headers: ['Beer', 'Brewery', 'ABV', 'Rating'],
+      rows: rated.filter(function(b) { return b._abv > 0; })
+        .map(function(b) { return { cols: [b.beer, b.brewery, b.abv, b.rating.toFixed(1)], sort: b.rating }; })
+        .sort(function(a, b) { return b.sort - a.sort; })
+        .slice(0, 100)
+    };
+  }
+
+  function injectToggleButtons() {
+    var toggleableCharts = ['chartStyles', 'chartBreweries', 'chartRegions', 'chartHops', 'chartNotes', 'chartAbv'];
+    toggleableCharts.forEach(function(canvasId) {
+      var canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      var card = canvas.closest('.insight-card');
+      if (!card) return;
+      var head = card.querySelector('.insight-head');
+      if (!head) return;
+      // Don't add duplicate toggle buttons
+      if (head.querySelector('.insight-toggle')) return;
+      var btn = document.createElement('button');
+      btn.className = 'insight-toggle';
+      btn.textContent = '☰ List';
+      btn.title = 'Toggle between chart and list view';
+      btn.dataset.chart = canvasId;
+      btn.addEventListener('click', function() { toggleInsightView(canvasId, card, btn); });
+      head.appendChild(btn);
+    });
+  }
+
+  function toggleInsightView(canvasId, card, btn) {
+    var chartWrapper = card.querySelector('.chart-wrapper');
+    var listWrapper = card.querySelector('.insight-list-view');
+    if (listWrapper) {
+      // Toggle back to chart
+      listWrapper.remove();
+      if (chartWrapper) chartWrapper.style.display = '';
+      btn.textContent = '☰ List';
+      btn.classList.remove('active');
+    } else {
+      // Show list view
+      if (chartWrapper) chartWrapper.style.display = 'none';
+      var listData = insightListData[canvasId];
+      if (!listData || !listData.rows.length) return;
+      var div = document.createElement('div');
+      div.className = 'insight-list-view';
+      var html = '<table class="lb-table insight-list-table"><thead><tr>';
+      listData.headers.forEach(function(h) { html += '<th>' + esc(h) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      listData.rows.slice(0, 50).forEach(function(r, i) {
+        html += '<tr>';
+        r.cols.forEach(function(c, ci) {
+          var style = ci === 0 ? ' style="color:var(--amber-l);font-weight:600"' : '';
+          html += '<td' + style + '>' + esc(c) + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      if (listData.rows.length > 50) {
+        html += '<div style="text-align:center;font-size:.75rem;color:var(--text-3);margin-top:8px">Showing top 50 of ' + listData.rows.length + '</div>';
+      }
+      div.innerHTML = html;
+      card.appendChild(div);
+      btn.textContent = '📊 Chart';
+      btn.classList.add('active');
+    }
   }
 
   // ── Surprise Beers: Z-Score Outlier Detection ──
@@ -1673,8 +1922,10 @@
     if (currentLb === 'breweries') {
       var brewMap = {};
       rated.forEach(function(b) {
-        if (!brewMap[b.brewery]) brewMap[b.brewery] = [];
-        brewMap[b.brewery].push(b.rating);
+        splitCollabs(b.brewery).forEach(function(bw) {
+          if (!brewMap[bw]) brewMap[bw] = [];
+          brewMap[bw].push(b.rating);
+        });
       });
       var entries = Object.entries(brewMap).filter(function(e) { return e[1].length >= 5; });
       if (entries.length) {
@@ -1703,8 +1954,10 @@
       var regionMap = {};
       rated.forEach(function(b) {
         if (!b.state) return;
-        if (!regionMap[b.state]) regionMap[b.state] = [];
-        regionMap[b.state].push(b.rating);
+        splitCollabs(b.state).forEach(function(r) {
+          if (!regionMap[r]) regionMap[r] = [];
+          regionMap[r].push(b.rating);
+        });
       });
       var regionEntries = Object.entries(regionMap).filter(function(e) { return e[1].length >= 5; });
       if (regionEntries.length) {
@@ -1753,9 +2006,23 @@
 
     rated.forEach(function(b) {
       var key;
-      if (currentLb === 'breweries') key = b.brewery || 'Unknown';
+      if (currentLb === 'breweries') {
+        splitCollabs(b.brewery || 'Unknown').forEach(function(bw) {
+          if (!map[bw]) map[bw] = { ratings: [], beers: [] };
+          map[bw].ratings.push(b.rating);
+          map[bw].beers.push(b);
+        });
+        return;
+      }
       else if (currentLb === 'styles') key = b.style || 'Unknown';
-      else if (currentLb === 'regions') key = b.state || 'Unknown';
+      else if (currentLb === 'regions') {
+        splitCollabs(b.state || 'Unknown').forEach(function(r) {
+          if (!map[r]) map[r] = { ratings: [], beers: [] };
+          map[r].ratings.push(b.rating);
+          map[r].beers.push(b);
+        });
+        return;
+      }
       else if (currentLb === 'hops') {
         if (!b.hops || b.hops === 'None') return;
         b.hops.split(',').forEach(function(h) {
@@ -1779,9 +2046,10 @@
       .map(function(e) {
         var k = e[0], v = e[1];
         var sorted = v.ratings.slice().sort(function(a,b){return a-b;});
+        var rowAvg = currentLb === 'breweries' ? sixPackScore(v.ratings, globalAvg) : avg(v.ratings);
         return {
           name: k,
-          avg: avg(v.ratings),
+          avg: rowAvg,
           count: v.ratings.length,
           min: sorted[0],
           max: sorted[sorted.length - 1],
@@ -1800,8 +2068,9 @@
     var minAvg = rows[rows.length - 1].avg;
     var medals = ['🥇', '🥈', '🥉'];
 
+    var avgLabel = currentLb === 'breweries' ? '6-Pack' : 'Avg';
     var html = '<table class="lb-table"><thead><tr>' +
-      '<th>#</th><th>Name</th><th>Avg</th><th>Count</th><th>Rating Bar</th><th>Distribution</th>' +
+      '<th>#</th><th>Name</th><th>' + avgLabel + '</th><th>Count</th><th>Rating Bar</th><th>Distribution</th>' +
       '</tr></thead><tbody>';
 
     rows.forEach(function(r, i) {
@@ -1864,10 +2133,17 @@
   function renderHiddenGems() {
     var rated = filtered.filter(function(b) { return b.rating != null && b.rating >= 8.5; });
     var brewCounts = {};
-    data.forEach(function(b) { brewCounts[b.brewery] = (brewCounts[b.brewery] || 0) + 1; });
+    data.forEach(function(b) {
+      splitCollabs(b.brewery).forEach(function(bw) {
+        brewCounts[bw] = (brewCounts[bw] || 0) + 1;
+      });
+    });
 
     // Gems are high-rated beers from breweries Kevin has tried ≤3 times
-    var gems = rated.filter(function(b) { return (brewCounts[b.brewery] || 0) <= 3; })
+    var gems = rated.filter(function(b) {
+      var maxCount = Math.max.apply(null, splitCollabs(b.brewery).map(function(bw) { return brewCounts[bw] || 0; }));
+      return maxCount <= 3;
+    })
       .sort(function(a, b) { return (b.rating || 0) - (a.rating || 0); })
       .slice(0, 30);
 
@@ -1884,7 +2160,7 @@
       html += '<tr data-id="' + b.id + '" style="cursor:pointer">' +
         '<td>' + rank + '</td>' +
         '<td style="color:var(--amber-l);font-weight:700">' + esc(b.beer) + '</td>' +
-        '<td style="color:var(--cyan)">' + esc(b.brewery) + ' <span style="font-size:.7rem;color:var(--text-3)">(' + (brewCounts[b.brewery] || 0) + ' tried)</span></td>' +
+        '<td style="color:var(--cyan)">' + esc(b.brewery) + ' <span style="font-size:.7rem;color:var(--text-3)">(' + Math.max.apply(null, splitCollabs(b.brewery).map(function(bw) { return brewCounts[bw] || 0; })) + ' tried)</span></td>' +
         '<td style="font-weight:700;color:var(--gold)">' + b.rating.toFixed(1) + '</td>' +
         '<td style="font-size:.8rem;color:var(--text-3)">' + esc(b.style) + '</td>' +
       '</tr>';
@@ -2003,9 +2279,9 @@
     let coffeeBeers = 0, heavyHitters = 0, barrelAged = 0;
 
     allBeers.forEach(function(b) {
-      if (b.brewery) brewerySet.add(b.brewery);
+      splitCollabs(b.brewery).forEach(function(bw) { if (bw) brewerySet.add(bw); });
       if (b.style) styleSet.add(b.style);
-      if (b.state) regionSet.add(b.state);
+      splitCollabs(b.state).forEach(function(r) { if (r) regionSet.add(r); });
       if (b.hops && b.hops !== 'None') {
         b.hops.split(',').forEach(function(h) { h = h.trim(); if (h) hopSet.add(h); });
       }
@@ -2074,9 +2350,15 @@
 
   function initHeroStats() {
     const total = data.length;
-    const breweries = new Set(data.map(b => b.brewery).filter(Boolean)).size;
+    const brewerySet2 = new Set();
+    const regionSet2 = new Set();
+    data.forEach(function(b) {
+      splitCollabs(b.brewery).forEach(function(bw) { if (bw) brewerySet2.add(bw); });
+      splitCollabs(b.state).forEach(function(r) { if (r) regionSet2.add(r); });
+    });
+    const breweries = brewerySet2.size;
     const styles = new Set(data.map(b => b.style).filter(Boolean)).size;
-    const regions = new Set(data.map(b => b.state).filter(Boolean)).size;
+    const regions = regionSet2.size;
     animateCount(dom.heroBeers, total);
     animateCount(dom.heroBreweries, breweries);
     animateCount(dom.heroStyles, styles);
@@ -2153,8 +2435,38 @@
       flushSearch();
       filters.region = this.value;
       $$('.preset').forEach(p => p.classList.remove('active'));
+      // Cascade: update city dropdown to show only cities in selected region
+      if (dom.filterCity) {
+        var currentCity = dom.filterCity.value;
+        dom.filterCity.innerHTML = '<option value="">Any City</option>';
+        var citiesToShow = dom._allCities || [];
+        if (filters.region && dom._cityToRegions) {
+          citiesToShow = citiesToShow.filter(function(c) {
+            var regs = dom._cityToRegions[c];
+            return regs && regs.has(filters.region);
+          });
+        }
+        citiesToShow.forEach(function(c) {
+          var o = document.createElement('option');
+          o.value = c; o.textContent = c;
+          dom.filterCity.appendChild(o);
+        });
+        // Reset city if it's no longer in the list
+        if (currentCity && citiesToShow.indexOf(currentCity) === -1) {
+          filters.city = '';
+          dom.filterCity.value = '';
+        }
+      }
       onFilterChange();
     });
+    if (dom.filterCity) {
+      dom.filterCity.addEventListener('change', function () {
+        flushSearch();
+        filters.city = this.value;
+        $$('.preset').forEach(p => p.classList.remove('active'));
+        onFilterChange();
+      });
+    }
     dom.filterRating.addEventListener('change', function () {
       flushSearch();
       filters.rating = this.value;
@@ -2352,9 +2664,9 @@
     var total10Plus = 0, totalSours = 0, totalIPAs = 0, totalStouts = 0;
 
     data.forEach(function (b) {
-      brewCounts[b.brewery] = (brewCounts[b.brewery] || 0) + 1;
+      splitCollabs(b.brewery).forEach(function(bw) { brewCounts[bw] = (brewCounts[bw] || 0) + 1; });
       styleCounts[b.style] = (styleCounts[b.style] || 0) + 1;
-      stateCounts[b.state] = (stateCounts[b.state] || 0) + 1;
+      splitCollabs(b.state).forEach(function(r) { if (r) stateCounts[r] = (stateCounts[r] || 0) + 1; });
       var haystack = [b.beer, b.tastingNotes, b.adjuncts].map(function (s) { return (s || '').toLowerCase(); }).join(' ');
       if (haystack.includes('coffee')) coffeeCount++;
       if (b.rating === 10) perfectCount++;
@@ -2429,11 +2741,15 @@
     var highestRated = null, lowestRated = null;
 
     data.forEach(function (b) {
-      brewCounts[b.brewery] = (brewCounts[b.brewery] || 0) + 1;
-      if (!brewRatings[b.brewery]) brewRatings[b.brewery] = [];
-      if (b.rating != null) brewRatings[b.brewery].push(b.rating);
+      splitCollabs(b.brewery).forEach(function(bw) {
+        brewCounts[bw] = (brewCounts[bw] || 0) + 1;
+        if (!brewRatings[bw]) brewRatings[bw] = [];
+        if (b.rating != null) brewRatings[bw].push(b.rating);
+      });
       styleCounts[b.style] = (styleCounts[b.style] || 0) + 1;
-      stateCounts[b.state] = (stateCounts[b.state] || 0) + 1;
+      splitCollabs(b.state).forEach(function(r) {
+        if (r) stateCounts[r] = (stateCounts[r] || 0) + 1;
+      });
       var haystack = [b.beer, b.tastingNotes, b.adjuncts].map(function (s) { return (s || '').toLowerCase(); }).join(' ');
       if (haystack.includes('coffee')) coffeeCount++;
       if (haystack.includes('barrel')) totalBarrel++;
@@ -2451,12 +2767,12 @@
     var topBrew = Object.entries(brewCounts).sort(function (a, b) { return b[1] - a[1]; })[0];
     var bestBrew = Object.entries(brewRatings)
       .filter(function (e) { return e[1].length >= 5; })
-      .map(function (e) { return { name: e[0], avg: avg(e[1]), count: e[1].length }; })
+      .map(function (e) { return { name: e[0], avg: sixPackScore(e[1], globalAvg), count: e[1].length }; })
       .sort(function (a, b) { return b.avg - a.avg; })[0];
 
     var awards = [
       { emoji: '🏆', title: 'Most Loyal', value: topBrew[0], detail: topBrew[1] + ' beers tried' },
-      { emoji: '⭐', title: 'Best Brewery', value: bestBrew ? bestBrew.name : '—', detail: bestBrew ? bestBrew.avg.toFixed(1) + ' avg (' + bestBrew.count + ' beers)' : '' },
+      { emoji: '⭐', title: 'Best Brewery', value: bestBrew ? bestBrew.name : '—', detail: bestBrew ? bestBrew.avg.toFixed(1) + ' six-pack score (' + bestBrew.count + ' beers)' : '' },
       { emoji: '💪', title: 'Strongest Beer', value: maxAbvBeer, detail: maxAbv + '% ABV' },
       { emoji: '🪶', title: 'Lightest Beer', value: minAbvBeer, detail: minAbv + '% ABV' },
       { emoji: '👑', title: 'The Crown Jewel', value: highestRated ? highestRated.beer : '—', detail: highestRated ? 'Rated ' + highestRated.rating + '/10' : '' },
@@ -2524,8 +2840,12 @@
         break;
       case 'hidden-gems': {
         var brewCounts = {};
-        data.forEach(function (b) { brewCounts[b.brewery] = (brewCounts[b.brewery] || 0) + 1; });
-        pool = rated.filter(function (b) { return b.rating >= 8.5 && (brewCounts[b.brewery] || 0) <= 3; });
+        data.forEach(function (b) {
+          splitCollabs(b.brewery).forEach(function(bw) { brewCounts[bw] = (brewCounts[bw] || 0) + 1; });
+        });
+        pool = rated.filter(function (b) {
+          return b.rating >= 8.5 && Math.max.apply(null, splitCollabs(b.brewery).map(function(bw) { return brewCounts[bw] || 0; })) <= 3;
+        });
         break;
       }
       case 'controversial': {
@@ -2919,9 +3239,12 @@
 
   function buildHuntChallenges() {
     var outstandingBeers = data.filter(function (b) { return b.simpleRating === 'Outstanding'; });
-    var regions = [...new Set(data.map(function (b) { return b.state; }).filter(Boolean))];
+    var regions = [...new Set(data.flatMap(function (b) { return splitCollabs(b.state); }).filter(Boolean))];
     var topBrews = Object.entries(
-      data.reduce(function (m, b) { m[b.brewery] = (m[b.brewery] || 0) + 1; return m; }, {})
+      data.reduce(function (m, b) {
+        splitCollabs(b.brewery).forEach(function(bw) { m[bw] = (m[bw] || 0) + 1; });
+        return m;
+      }, {})
     ).filter(function (e) { return e[1] >= 10; }).map(function (e) { return e[0]; });
 
     huntChallenges = [
@@ -3025,7 +3348,9 @@
     if (!container) return;
 
     var total = data.length;
-    var breweries = new Set(data.map(function (b) { return b.brewery; }).filter(Boolean)).size;
+    var brewSet3 = new Set();
+    data.forEach(function(b) { splitCollabs(b.brewery).forEach(function(bw) { if (bw) brewSet3.add(bw); }); });
+    var breweries = brewSet3.size;
     var styles = new Set(data.map(function (b) { return b.style; }).filter(Boolean)).size;
     var rated = data.filter(function (b) { return b.rating != null; });
     var avgR = avg(rated.map(function (b) { return b.rating; }));
@@ -3055,7 +3380,9 @@
     if (welcomed) return;
 
     var total = data.length;
-    var breweries = new Set(data.map(function (b) { return b.brewery; }).filter(Boolean)).size;
+    var brewSet4 = new Set();
+    data.forEach(function(b) { splitCollabs(b.brewery).forEach(function(bw) { if (bw) brewSet4.add(bw); }); });
+    var breweries = brewSet4.size;
     var styles = new Set(data.map(function (b) { return b.style; }).filter(Boolean)).size;
     var topBrew = Object.entries(
       data.reduce(function (m, b) { m[b.brewery] = (m[b.brewery] || 0) + 1; return m; }, {})
@@ -3130,7 +3457,14 @@
       '.flight-beer-card:hover{background:rgba(240,160,48,.08);border-color:rgba(240,160,48,.2)}' +
       '.flight-num{font-size:1.1rem;font-weight:800;color:var(--amber-l);min-width:24px;text-align:center;padding-top:2px}' +
       '.flight-info{flex:1;min-width:0}' +
-      '.flight-result h4{font-size:1rem;font-weight:700}';
+      '.flight-result h4{font-size:1rem;font-weight:700}' +
+      '.insight-toggle{margin-left:auto;padding:3px 10px;font-size:.72rem;font-weight:600;color:var(--text-3);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:5px;cursor:pointer;transition:all .15s;line-height:1.4}' +
+      '.insight-toggle:hover{color:var(--amber-l);border-color:rgba(240,160,48,.3);background:rgba(240,160,48,.08)}' +
+      '.insight-toggle.active{color:var(--amber-l);border-color:rgba(240,160,48,.25);background:rgba(240,160,48,.06)}' +
+      '.insight-head{display:flex;align-items:center;gap:8px}' +
+      '.insight-list-view{max-height:400px;overflow-y:auto;margin-top:8px}' +
+      '.insight-list-table{font-size:.8rem}' +
+      '.insight-list-table td,.insight-list-table th{padding:5px 8px}';
     document.head.appendChild(dynamicStyle);
 
     // Restore state from URL hash
