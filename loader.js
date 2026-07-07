@@ -19,7 +19,9 @@
     'Tasting Notes':  'tastingNotes',
     'Hops':           'hops',
     'Simple Rating':  'simpleRating',
-    'Adjuncts':       'adjuncts'
+    'Adjuncts':       'adjuncts',
+    'Barrel':         'barrel',
+    'Time':           'barrelTime'
   };
 
   var messages = [

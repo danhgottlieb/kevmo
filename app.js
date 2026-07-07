@@ -384,7 +384,7 @@
       // Text search — all text columns (word-boundary matching)
       if (search) {
         var haystack = [b.beer, b.brewery, b.style, b.tastingNotes, b.adjuncts, b.hops,
-                        b.city, b.state, b.purchased, b.servingType]
+                        b.city, b.state, b.purchased, b.servingType, b.barrel]
           .map(function(s) { return s || ''; }).join(' ');
         if (searchRe) {
           if (!searchRe.test(haystack)) return false;
@@ -691,6 +691,14 @@
         : '') +
       (beer.adjuncts && beer.adjuncts !== 'None'
         ? '<div class="modal-section"><h4>🧪 Adjuncts &amp; Additions</h4><p>' + esc(beer.adjuncts) + '</p></div>'
+        : '') +
+      ((beer.barrel && beer.barrel !== 'None') || (beer.barrelTime && beer.barrelTime !== 'None')
+        ? '<div class="modal-section"><h4>🛢️ Barrel Aging</h4><p>' +
+          (beer.barrel && beer.barrel !== 'None' ? esc(beer.barrel) : '') +
+          (beer.barrelTime && beer.barrelTime !== 'None'
+            ? (beer.barrel && beer.barrel !== 'None' ? ' · ' : '') + '<em>' + esc(beer.barrelTime) + '</em>'
+            : '') +
+          '</p></div>'
         : '') +
       (hopList.length
         ? '<div class="modal-section"><h4>🌿 Hops</h4><div class="hop-tags">' +
