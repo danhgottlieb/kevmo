@@ -1,11 +1,11 @@
 # KevMo — One Man's Quest to Rate Every Beer
 
 ## Project Overview
-A beer exploration website for Kevin, displaying ~5,600+ beers with ratings, styles, tasting notes, and more. Features 5 tabs: The Collection, Insights, Leaderboards, Trophy Case, and Play.
+A beer exploration website for Kevin, displaying ~6,000+ beers with ratings, styles, tasting notes, and more. Features 5 tabs: The Collection, Insights, Leaderboards, Trophy Case, and Play.
 
 ## Architecture
 - **Frontend**: Single-page HTML/CSS/JS app (no framework)
-- **Data source**: Excel file hosted on Dropbox (`Beer2.xlsx`, first tab "Beer")
+- **Data source**: Excel file hosted on Dropbox (`Beer3.xlsx`, first tab "Beer")
 - **Data loading**: `loader.js` fetches Excel via `/api/beer-data` proxy → parses with SheetJS → sets `BEER_DATA` global → loads `app.js`
 - **Local dev server**: `server.js` (Express on port 8080) — proxies Dropbox to avoid CORS
 - **Production**: Vercel (static site + serverless function)
@@ -21,7 +21,8 @@ A beer exploration website for Kevin, displaying ~5,600+ beers with ratings, sty
 | `server.js` | Local Express dev server (port 8080) with Dropbox proxy |
 | `api/beer-data.js` | Vercel serverless function — Dropbox proxy for production |
 | `vercel.json` | Vercel config: no build, static site, outputDirectory "." |
-| `assets/` | Kevin images (kevin-1 through kevin-6, kevin-loading, mascot) |
+| `site.webmanifest` | Installable-site metadata and home-screen icon definitions |
+| `assets/` | Kevin images plus favicon, Apple touch, and install icons |
 
 ## Hosting & Deployment
 
@@ -70,9 +71,9 @@ node server.js     # starts on http://localhost:8080
 ```
 
 ## Data Pipeline
-- Source: Dropbox shared Excel (`Beer2.xlsx`)
-- Dropbox link (dl=1): https://www.dropbox.com/scl/fi/8u9ifsy581x3konc49m42/Beer2.xlsx?rlkey=ylaxr0881z5q7bp54vyoh5kx7&st=xrfa0sjo&dl=1
-- Columns: Beer, Brewery, City, State/Country, Style, ABV, Serving Type, Purchased, Rating, Tasting Notes, Hops, Simple Rating, Adjuncts
+- Source: Dropbox shared Excel (`Beer3.xlsx`)
+- Dropbox link (dl=1): https://www.dropbox.com/scl/fi/0f3beusdcstafy7ynf5tj/Beer3.xlsx?rlkey=tzupj0ip8barsn48rhjqjzdat&st=cz2qy013&dl=1
+- Columns: Beer, Brewery, City, State/Country, Style, ABV, Serving Type, Purchased, Rating, Simple Rating, Tasting Notes, Adjuncts, Hops, Barrel, Time
 - To update data: edit the Excel in Dropbox — the site refreshes from it on each page load (cached 5 min via `s-maxage=300`)
 
 ## Previous Work (Session History)
@@ -80,5 +81,7 @@ node server.js     # starts on http://localhost:8080
 - Integrated 6 Kevin photos throughout the site
 - Built loading screen with Kevin sipping beer + animated bubbles
 - Added Dropbox integration replacing static `data.js`
+- Switched the live data source to `Beer3.xlsx` with 200 additional beer records and source-backed ABV/location/style enrichment
+- Swapped the homepage and Leaderboards Kevin images; the homepage image also supplies the browser and home-screen icons
 - Fixed filter bugs (DOM orphaning in updateResultCount, tab-switching logic)
 - Mobile fixes: sticky tabs, removed "Dive In" overlay, removed "Try KevMo AI" link

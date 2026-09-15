@@ -1,4 +1,4 @@
-/* loader.js — Fetch Beer2.xlsx from Dropbox, parse "beer" tab, set BEER_DATA */
+/* loader.js — Fetch Beer3.xlsx from Dropbox, parse "beer" tab, set BEER_DATA */
 (function () {
   'use strict';
 

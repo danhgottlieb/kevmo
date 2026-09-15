@@ -1,7 +1,7 @@
-/* api/beer-data.js — Vercel serverless proxy for Dropbox Beer2.xlsx */
+/* api/beer-data.js — Vercel serverless proxy for Dropbox Beer3.xlsx */
 
 const DROPBOX_URL =
-  'https://www.dropbox.com/scl/fi/8u9ifsy581x3konc49m42/Beer2.xlsx?rlkey=ylaxr0881z5q7bp54vyoh5kx7&st=xrfa0sjo&dl=1';
+  'https://www.dropbox.com/scl/fi/0f3beusdcstafy7ynf5tj/Beer3.xlsx?rlkey=tzupj0ip8barsn48rhjqjzdat&st=cz2qy013&dl=1';
 
 module.exports = async function handler(req, res) {
   try {

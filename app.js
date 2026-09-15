@@ -61,6 +61,17 @@
     return isNaN(n) ? 0 : n;
   }
 
+  function hasBarrelAging(beer) {
+    if ((beer.barrel && beer.barrel !== 'None') ||
+        (beer.barrelTime && beer.barrelTime !== 'None')) {
+      return true;
+    }
+    return [beer.beer, beer.style, beer.tastingNotes, beer.adjuncts]
+      .map(function(s) { return (s || '').toLowerCase(); })
+      .join(' ')
+      .includes('barrel');
+  }
+
   function ratingClass(simple) {
     if (!simple) return 'rating-other';
     const map = {
@@ -384,7 +395,7 @@
       // Text search — all text columns (word-boundary matching)
       if (search) {
         var haystack = [b.beer, b.brewery, b.style, b.tastingNotes, b.adjuncts, b.hops,
-                        b.city, b.state, b.purchased, b.servingType, b.barrel]
+                        b.city, b.state, b.purchased, b.servingType, b.barrel, b.barrelTime]
           .map(function(s) { return s || ''; }).join(' ');
         if (searchRe) {
           if (!searchRe.test(haystack)) return false;
@@ -430,9 +441,9 @@
       // Ingredient keyword
       if (filters.ingredient) {
         const kw = filters.ingredient.toLowerCase();
-        const haystack = [b.beer, b.tastingNotes, b.adjuncts, b.hops]
+        const haystack = [b.beer, b.style, b.tastingNotes, b.adjuncts, b.hops, b.barrel, b.barrelTime]
           .map(s => (s || '').toLowerCase()).join(' ');
-        if (!haystack.includes(kw)) return false;
+        if (kw === 'barrel' ? !hasBarrelAging(b) : !haystack.includes(kw)) return false;
       }
       return true;
     });
@@ -2302,8 +2313,7 @@
       var haystack = [b.beer, b.tastingNotes, b.adjuncts].map(function(s) { return (s || '').toLowerCase(); }).join(' ');
       if (haystack.includes('coffee')) coffeeBeers++;
       if (b._abv >= 10) heavyHitters++;
-      var barrelHay = haystack + ' ' + (b.style || '').toLowerCase();
-      if (barrelHay.includes('barrel')) barrelAged++;
+      if (hasBarrelAging(b)) barrelAged++;
     });
 
     return [
@@ -2760,7 +2770,7 @@
       });
       var haystack = [b.beer, b.tastingNotes, b.adjuncts].map(function (s) { return (s || '').toLowerCase(); }).join(' ');
       if (haystack.includes('coffee')) coffeeCount++;
-      if (haystack.includes('barrel')) totalBarrel++;
+      if (hasBarrelAging(b)) totalBarrel++;
       var sl = (b.style || '').toLowerCase();
       if (sl.includes('sour') || sl.includes('gose') || sl.includes('wild') || sl.includes('lambic')) totalSour++;
       var abv = b._abv;
