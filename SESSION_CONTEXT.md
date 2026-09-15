@@ -35,7 +35,7 @@ A beer exploration website for Kevin, displaying ~6,000+ beers with ratings, sty
 - **Live URL**: https://kevmo.vercel.app
 - **Project**: https://vercel.com/danhgottliebs-projects/kevmo
 - **Account**: Signed up via `danhgottlieb` GitHub account
-- **Auto-deploy**: NOT YET CONNECTED — need to install Vercel GitHub app (see below)
+- **Auto-deploy**: Connected to `danhgottlieb/kevmo` on September 15, 2026
 
 ### How to Deploy Changes
 1. Make edits to the code locally in `C:\Users\dagottl\kevmo`
@@ -44,16 +44,13 @@ A beer exploration website for Kevin, displaying ~6,000+ beers with ratings, sty
    cd C:\Users\dagottl\kevmo
    git add -A && git commit -m "description" && git push
    ```
-3. Deploy to Vercel (until auto-deploy is set up):
+3. Vercel automatically builds and deploys pushes to `master`
+
+### Manual Deployment Fallback
+If the Git integration is unavailable, deploy from the linked project:
    ```
    cd C:\Users\dagottl\kevmo && npx vercel deploy --prod
    ```
-
-### To Enable Auto-Deploy (one-time setup)
-1. Open a browser signed in as `danhgottlieb` on GitHub
-2. Go to https://vercel.com → Project Settings → Git
-3. Connect the `danhgottlieb/kevmo` repo
-4. After this, every `git push` will auto-deploy — no manual `vercel deploy` needed
 
 ## Git Auth Notes
 - `gh` CLI is normally authenticated as `dagottl_microsoft` (work account)
@@ -83,5 +80,6 @@ node server.js     # starts on http://localhost:8080
 - Added Dropbox integration replacing static `data.js`
 - Switched the live data source to `Beer3.xlsx` with 200 additional beer records and source-backed ABV/location/style enrichment
 - Swapped the homepage and Leaderboards Kevin images; the homepage image also supplies the browser and home-screen icons
+- Connected the Vercel project to `danhgottlieb/kevmo` for automatic production deployments
 - Fixed filter bugs (DOM orphaning in updateResultCount, tab-switching logic)
 - Mobile fixes: sticky tabs, removed "Dive In" overlay, removed "Try KevMo AI" link
